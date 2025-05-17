@@ -83,12 +83,10 @@
             <v-list dense>
                 <v-list-item v-for="(file, index) in uploadedFiles" :key="index"
                     @click="file.isImage ? viewImage(file) : null" :class="{ 'clickable': file.isImage }" class="pa-2">
-                    <v-list-item-icon class="align-self-start mt-3">
                         <v-icon v-if="file.isImage">mdi-image</v-icon>
                         <v-icon v-else>mdi-file-document-outline</v-icon>
-                    </v-list-item-icon>
 
-                    <v-list-item-content>
+
                         <v-img v-if="file.isImage && file.url" :src="file.url" max-height="300px" contain
                             class="mb-2 rounded-lg"
                             style="border: 1px solid #e0e0e0; background-color: #f9f9f9; width: 100%;"
@@ -103,7 +101,7 @@
                         <v-list-item-subtitle v-else class="mt-1">
                             {{ formatBytes(file.size) }}
                         </v-list-item-subtitle>
-                    </v-list-item-content>
+
 
                     <v-list-item-action class="align-self-start mt-3">
                         <v-btn icon @click.stop="viewImage(file)" v-if="file.isImage">
