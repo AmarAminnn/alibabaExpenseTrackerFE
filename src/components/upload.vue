@@ -16,7 +16,6 @@
                     <p class="text-h6 success--text mt-2">Receipt Processed. Analyze another below.</p>
                 </div>
 
-
                 <p class="mb-4" v-if="!receiptProcessedSuccessfully">
                     Select a file or drag and drop it here (e.g., receipt image, PDF report).
                 </p>
@@ -72,7 +71,6 @@
                     <v-icon left>mdi-refresh</v-icon>
                     Analyze Another Receipt
                 </v-btn>
-
             </v-card-text>
         </v-card>
 
@@ -85,7 +83,6 @@
                     @click="file.isImage ? viewImage(file) : null" :class="{ 'clickable': file.isImage }" class="pa-2">
                         <v-icon v-if="file.isImage">mdi-image</v-icon>
                         <v-icon v-else>mdi-file-document-outline</v-icon>
-
 
                         <v-img v-if="file.isImage && file.url" :src="file.url" max-height="300px" contain
                             class="mb-2 rounded-lg"
@@ -102,12 +99,32 @@
                             {{ formatBytes(file.size) }}
                         </v-list-item-subtitle>
 
-
                     <v-list-item-action class="align-self-start mt-3">
                         <v-btn icon @click.stop="viewImage(file)" v-if="file.isImage">
                             <v-icon color="grey lighten-1">mdi-eye</v-icon>
                         </v-btn>
                     </v-list-item-action>
+                </v-list-item>
+            </v-list>
+        </v-card>
+
+        <v-card v-if="extractedItems.length > 0" class="mx-auto pa-5 mt-6" max-width="600" outlined>
+            <v-card-title class="text-h6 font-weight-medium mb-3">
+                Extracted Items
+            </v-card-title>
+            <v-list dense>
+                <v-list-item v-for="(item, index) in extractedItems" :key="index" class="pa-2">
+
+                        <v-icon>mdi-receipt-text-outline</v-icon>
+
+
+                        <v-list-item-title class="font-weight-medium">
+                            {{ item.name }}
+                        </v-list-item-title>
+                        <v-list-item-subtitle>
+                            Category: {{ item.category }} | Price: ${{ item.price_final.toFixed(2) }}
+                        </v-list-item-subtitle>
+
                 </v-list-item>
             </v-list>
         </v-card>
@@ -131,11 +148,13 @@
                 </v-card-actions>
             </v-card>
         </v-dialog>
-
     </v-container>
 </template>
 
 <script>
+// Import your centralized API instance
+import api from '@/api';
+
 export default {
     name: 'ExpenseUpload',
     data() {
@@ -156,6 +175,8 @@ export default {
             viewingImageName: '',
             isDraggingOver: false,
             receiptProcessedSuccessfully: false,
+            extractedItems: [],
+            addedItems: [],
         };
     },
     methods: {
@@ -258,21 +279,18 @@ export default {
         },
 
         async uploadFile() {
-            // --- Guard against multiple rapid invocations ---
+            // Guard against multiple rapid invocations
             if (this.uploading) {
                 console.warn('[DEBUG] uploadFile - Already uploading. Call ignored.');
                 return;
             }
-            // -------------------------------------------------
 
             console.log('[DEBUG] uploadFile - CALLED.');
-            console.log('[DEBUG] uploadFile - Current this.actualFileObject:', this.actualFileObject ? { name: this.actualFileObject.name, size: this.actualFileObject.size, type: this.actualFileObject.type } : null);
-            console.log('[DEBUG] uploadFile - Current this.isImage:', this.isImage);
-            console.log('[DEBUG] uploadFile - Current this.isPreviewReady:', this.isPreviewReady);
-            console.log('[DEBUG] uploadFile - Current this.filePreviewUrl (first 50 chars):', this.filePreviewUrl ? this.filePreviewUrl.substring(0, 50) + '...' : null);
-
+            
             if (!this.actualFileObject || this.receiptProcessedSuccessfully) {
-                this.uploadMessage = this.receiptProcessedSuccessfully ? 'Receipt already processed. Click "Analyze Another" to upload a new one.' : 'Please select a file first.';
+                this.uploadMessage = this.receiptProcessedSuccessfully ? 
+                    'Receipt already processed. Click "Analyze Another" to upload a new one.' : 
+                    'Please select a file first.';
                 this.uploadStatus = 'warning';
                 console.warn('[DEBUG] uploadFile - No file or receipt already processed. Returning.');
                 return;
@@ -285,75 +303,110 @@ export default {
                 return;
             }
 
-            this.uploading = true; // Set uploading flag
+            this.uploading = true;
             this.uploadProgress = 0;
-            this.uploadMessage = '';
+            this.uploadMessage = 'Analyzing receipt with AI...';
+            this.uploadStatus = 'info';
 
-            const fileName = this.actualFileObject.name;
-            const fileSize = this.actualFileObject.size;
-            const fileType = this.actualFileObject.type;
+            // Create FormData to send the file
+            const formData = new FormData();
+            formData.append('file', this.actualFileObject);
 
+            // Store file info for display
             const fileToUpload = {
-                name: fileName,
-                size: fileSize,
-                type: fileType,
+                name: this.actualFileObject.name,
+                size: this.actualFileObject.size,
+                type: this.actualFileObject.type,
                 isImage: this.isImage,
                 url: this.isImage ? this.filePreviewUrl : null
             };
 
-            console.log('[DEBUG] uploadFile - fileToUpload object constructed:', JSON.stringify(fileToUpload));
+            console.log('[DEBUG] uploadFile - Preparing to upload file:', this.actualFileObject.name);
 
+            // Set up progress tracking
             let progress = 0;
             const progressInterval = setInterval(() => {
-                if (progress < 100) {
-                    progress += 10;
+                if (progress < 90) { // Only go to 90% until we get API confirmation
+                    progress += 5;
                     this.uploadProgress = progress;
-                } else {
-                    clearInterval(progressInterval);
                 }
             }, 200);
 
             try {
-                await new Promise(resolve => setTimeout(resolve, 1500));
+                // Call the API endpoint
+                console.log('[DEBUG] uploadFile - Calling API endpoint: process-receipt/');
+                const response = await api.post(
+                    'process-receipt/', 
+                    formData,
+                    {
+                        headers: {
+                            'Content-Type': 'multipart/form-data'
+                        }
+                    }
+                );
+
                 clearInterval(progressInterval);
                 this.uploadProgress = 100;
 
-                this.uploadMessage = `File "${fileToUpload.name}" processed. See details below.`; // Adjusted message
+                console.log('[DEBUG] uploadFile - API response received:', response.data);
+                
+                // Extract information from the response
+                this.extractedItems = response.data.receipt_data?.items || [];
+                this.addedItems = response.data.added_items || [];
+                
+                // Handle successful response
+                this.uploadMessage = `Receipt processed successfully. ${this.addedItems.length} items extracted and added to your expenses.`;
                 this.uploadStatus = 'success';
-
-                console.log('[DEBUG] uploadFile - Simulated success. Pushing to uploadedFiles:', JSON.stringify(fileToUpload));
 
                 if (fileToUpload.isImage && !fileToUpload.url) {
                     console.error("[CRITICAL DEBUG] uploadFile - Image URL is null for an image file being pushed.", fileToUpload);
                 }
-                this.uploadedFiles = [fileToUpload]; // Replace, don't push, to ensure only one is shown
-
+                
+                this.uploadedFiles = [fileToUpload];
                 this.receiptProcessedSuccessfully = true;
-                console.log('[DEBUG] uploadFile - receiptProcessedSuccessfully set to true.');
+                
+                // Emit event with extracted data for parent component
+                this.$emit('file-uploaded', {
+                    fileName: fileToUpload.name,
+                    fileSize: fileToUpload.size,
+                    extractedData: response.data
+                });
 
-                this.$emit('file-uploaded', { fileName: fileToUpload.name, fileSize: fileToUpload.size });
-
-                // Clear selection state but keep uploading true until resetForNewReceipt or if an error occurs
-                // This is because the "Analyze Another Receipt" button should appear, and progress bar might still be visible.
+                // Clear selection state
                 this.actualFileObject = null;
                 this.selectedFileValue = null;
                 this.filePreviewUrl = null;
                 this.isImage = false;
                 this.isPreviewReady = true;
-                // this.uploading = false; // Set to false by resetForNewReceipt or in catch block
                 this.fileInputKey++;
-
 
             } catch (error) {
                 clearInterval(progressInterval);
                 this.uploadProgress = 0;
-                console.error('[DEBUG] uploadFile - Error during simulated upload:', error);
-                this.uploadMessage = `An error occurred during upload: ${error.message || 'Unknown error'}`;
+                
+                console.error('[DEBUG] uploadFile - API error:', error);
+                
+                // Handle error response
+                let errorMessage = 'Error processing receipt';
+                
+                if (error.response) {
+                    // The server responded with an error status
+                    errorMessage = error.response.data?.detail || `Server error (${error.response.status})`;
+                    console.error('[DEBUG] uploadFile - Server error:', error.response.data);
+                } else if (error.request) {
+                    // No response received
+                    errorMessage = 'No response from server. Please check your connection.';
+                    console.error('[DEBUG] uploadFile - No response received');
+                } else {
+                    // Request setup error
+                    errorMessage = error.message || 'Unknown error';
+                    console.error('[DEBUG] uploadFile - Request setup error:', error.message);
+                }
+                
+                this.uploadMessage = errorMessage;
                 this.uploadStatus = 'error';
-                this.uploading = false; // Ensure uploading is false on error
+                this.uploading = false;
             }
-            // Note: `this.uploading` will be set to false by `resetForNewReceipt` when the user chooses to analyze another,
-            // or in the catch block if an error occurs.
         },
 
         resetForNewReceipt() {
@@ -369,10 +422,11 @@ export default {
             this.uploadStatus = 'info';
             this.uploadedFiles = [];
             this.receiptProcessedSuccessfully = false;
+            this.extractedItems = [];
+            this.addedItems = [];
             this.fileInputKey++;
             console.log('[DEBUG] resetForNewReceipt - State fully reset.');
         },
-
 
         formatBytes(bytes, decimals = 2) {
             if (!bytes || bytes === 0) return '0 Bytes';
