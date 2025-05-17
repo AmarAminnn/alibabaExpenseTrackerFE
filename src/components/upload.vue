@@ -62,14 +62,10 @@
             <v-list dense>
                 <v-list-item v-for="(file, index) in uploadedFiles" :key="index"
                     @click="file.isImage ? viewImage(file) : null" :class="{ 'clickable': file.isImage }">
-                    <v-list-item-icon>
                         <v-icon v-if="file.isImage">mdi-image</v-icon>
                         <v-icon v-else>mdi-file-document-outline</v-icon>
-                    </v-list-item-icon>
-                    <v-list-item-content>
                         <v-list-item-title>{{ file.name }}</v-list-item-title>
                         <v-list-item-subtitle v-if="file.isImage">Click to view</v-list-item-subtitle>
-                    </v-list-item-content>
                     <v-list-item-action v-if="file.isImage">
                         <v-btn icon @click.stop="viewImage(file)">
                             <v-icon color="grey lighten-1">mdi-eye</v-icon>

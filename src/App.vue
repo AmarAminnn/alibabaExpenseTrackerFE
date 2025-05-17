@@ -3,34 +3,82 @@
     <v-main>
       <v-container fluid>
         <UserUploadComponent />
+      </v-container>
 
+      <v-container>
+        <v-row>
+          <v-col cols="12">
+            <h1>Expense Dashboard</h1>
+          </v-col>
+          <v-col cols="12" md="6">
+            <!-- Display the pie chart -->
+            <ExpensePieChart :expenses="allExpenses" />
+          </v-col>
+          <v-col cols="12" md="6">
+            <!-- Maybe a list of expenses here -->
+            <v-card>
+              <v-card-title>All Expenses</v-card-title>
+              <v-card-text>
+                <v-list>
+                  <v-list-item v-for="expense in allExpenses" :key="expense.id">
+                    <!-- Remove v-list-item-content and place title/subtitle directly in v-list-item -->
+                    <template v-slot:title>{{ expense.item_name }}</template>
+                    <template v-slot:subtitle>{{ expense.category }} - ${{ formatPrice(expense.price) }}</template>
+                  </v-list-item>
+                </v-list>
+              </v-card-text>
+            </v-card>
+          </v-col>
+        </v-row>
       </v-container>
     </v-main>
   </v-app>
 </template>
 
 <script>
-// 1. Import the HelloWorld component if you plan to use it (optional)
-// import HelloWorld from './components/HelloWorld.vue';
-
-// 2. Import your upload component from its file path
-//    It's a common convention to use PascalCase for component names in JavaScript.
-import UserUpload from './components/upload.vue'; // This points to your src/components/upload.vue file
+// Imports remain the same
+import UserUpload from './components/upload.vue';
+import ExpensePieChart from '@/components/ExpensePieChart.vue';
+import { ref, onMounted } from 'vue';
+import api from '@/api';
 
 export default {
   name: 'App',
   components: {
-    // HelloWorld, // Register HelloWorld if you've imported it and want to use <HelloWorld />
-
-    // 3. Register your upload component.
-    //    The key here (e.g., 'UserUploadComponent') is how you will refer to it in the <template>
-    //    The value (UserUpload) is the component you imported.
     UserUploadComponent: UserUpload,
+    ExpensePieChart,
   },
-  // You can add data, methods, computed properties, etc., for App.vue here if needed
   data: () => ({
     //
   }),
+  setup() {
+    const allExpenses = ref([]); // Reactive reference to hold expense data
+
+    const fetchExpenses = async () => {
+      try {
+        const response = await api.get('/expenses');
+        allExpenses.value = response.data;
+      } catch (error) {
+        console.error('Error fetching expenses:', error);
+      }
+    };
+
+    // Add a function to format the price
+    const formatPrice = (price) => {
+      if (price === undefined || price === null) return '0.00';
+      return parseFloat(price).toFixed(2);
+    };
+
+    // Fetch expenses when the component is mounted
+    onMounted(() => {
+      fetchExpenses();
+    });
+
+    return {
+      allExpenses,
+      formatPrice, // Make the function available to the template
+    };
+  },
 };
 </script>
 
@@ -41,3 +89,4 @@ export default {
   padding: 20px;
 } */
 </style>
+
